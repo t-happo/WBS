@@ -27,21 +27,21 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user = user.get_by_username(db, username=username)
-    if user is None:
+    user_obj = user.get_by_username(db, username=username)
+    if user_obj is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    if not user.is_active:
+    if not user_obj.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user"
         )
     
-    return user
+    return user_obj
 
 
 def get_current_active_user(
@@ -78,6 +78,16 @@ def get_optional_current_user(
         return None
     
     try:
-        return get_current_user(db, credentials)
+        token = credentials.credentials
+        username = verify_token(token)
+        
+        if username is None:
+            return None
+        
+        user_obj = user.get_by_username(db, username=username)
+        if user_obj is None or not user_obj.is_active:
+            return None
+        
+        return user_obj
     except HTTPException:
         return None
