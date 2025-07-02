@@ -9,7 +9,7 @@ from ..crud.user import user
 from ..models import User
 
 # Security scheme
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def get_current_user(

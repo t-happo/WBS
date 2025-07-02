@@ -102,18 +102,19 @@ docker-compose up -d backend
 docker-compose --profile frontend up -d
 ```
 
-### 4. 初期データの投入
+### 4. データベースマイグレーション & 初期データ投入
 ```bash
-# 開発サーバーが起動した状態で
-curl -X POST "http://localhost:8000/api/v1/users/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "email": "admin@example.com",
-    "full_name": "System Administrator",
-    "password": "admin123",
-    "role": "system_admin"
-  }'
+# backend ディレクトリで実行
+cd backend
+
+# 1) Alembic マイグレーションを適用
+alembic upgrade head
+
+# 2) 初期管理者ユーザー(seed) 作成
+python seed.py
+
+# ログに "Admin user created" と表示されれば完了です。
+# 既にユーザーが存在する場合はスキップされます。
 ```
 
 ## API仕様

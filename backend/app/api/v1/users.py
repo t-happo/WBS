@@ -10,6 +10,7 @@ from ...core.security import create_access_token
 from ...crud import user
 from ...schemas.user import User, UserCreate, UserUpdate, Token, UserLogin
 from ...api.deps import get_current_user, get_current_admin_user, get_optional_current_user
+from ...models import UserRole, User as UserModel  # ローカル importで循環参照回避
 
 router = APIRouter()
 
@@ -123,9 +124,7 @@ def create_user(
     """
 
     # ユーザーが存在するかを確認
-    from ...models import UserRole  # ローカル import で循環参照回避
-
-    total_users: int = db.query(User).count()  # type: ignore[arg-type]
+    total_users: int = db.query(UserModel).count()
 
     if total_users > 0:
         # 既にユーザーがいる場合は認可チェック
