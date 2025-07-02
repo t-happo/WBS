@@ -86,8 +86,11 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 # 依存関係インストール
 pip install -r requirements.txt
 
-# データベース初期化（SQLite）
-python -c "from app.database import create_tables; create_tables()"
+# データベースマイグレーション実行
+alembic upgrade head
+
+# 初期データ投入（システム管理者作成）
+python seed.py
 
 # 開発サーバー起動
 uvicorn app.main:app --reload
@@ -104,16 +107,20 @@ docker-compose --profile frontend up -d
 
 ### 4. 初期データの投入
 ```bash
-# 開発サーバーが起動した状態で
-curl -X POST "http://localhost:8000/api/v1/users/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "email": "admin@example.com",
-    "full_name": "System Administrator",
-    "password": "admin123",
-    "role": "system_admin"
-  }'
+# 仮想環境を有効にして（SQLiteでの開発環境の場合）
+source venv/bin/activate
+
+# Alembicマイグレーションを実行
+alembic upgrade head
+
+# Seedスクリプトで初期システム管理者を作成
+python seed.py
+```
+
+**または Docker Composeを使用している場合:**
+```bash
+# コンテナ内でseedスクリプトを実行
+docker-compose exec backend python seed.py
 ```
 
 ## API仕様

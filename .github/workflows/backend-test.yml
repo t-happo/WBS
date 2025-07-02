@@ -1,0 +1,73 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - 'tests/**'
+      - '.github/workflows/backend-test.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - 'tests/**'
+      - '.github/workflows/backend-test.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Lint with ruff
+      working-directory: ./backend
+      run: |
+        # Check for syntax errors and undefined names
+        ruff check . --select=E9,F63,F7,F82 --show-source
+        # Check all rules with exit-zero for now (warnings only)
+        ruff check . --exit-zero
+
+    - name: Format check with ruff
+      working-directory: ./backend
+      run: |
+        ruff format --check .
+
+    - name: Run database migrations
+      working-directory: ./backend
+      run: |
+        # Create test database and run migrations
+        alembic upgrade head
+
+    - name: Run tests with pytest
+      working-directory: ./backend
+      run: |
+        # Run tests with verbose output and coverage
+        python -m pytest ../tests/ -v --tb=short
+      env:
+        # Set test environment variables
+        DATABASE_URL: sqlite:///./test_project_management.db
+        SECRET_KEY: test-secret-key-for-ci
+        ACCESS_TOKEN_EXPIRE_MINUTES: 60
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.python-version }}
+        path: backend/test-results/
