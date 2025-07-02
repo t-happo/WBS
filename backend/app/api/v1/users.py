@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -9,7 +9,7 @@ from ...core.config import settings
 from ...core.security import create_access_token
 from ...crud import user
 from ...schemas.user import User, UserCreate, UserUpdate, Token, UserLogin
-from ...api.deps import get_current_user, get_current_admin_user
+from ...api.deps import get_current_user, get_current_admin_user, get_optional_current_user
 
 router = APIRouter()
 
@@ -114,23 +114,48 @@ def create_user(
     *,
     db: Session = Depends(get_db),
     user_in: UserCreate,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ) -> Any:
-    """Create new user (admin only)"""
+    """Create new user.
+
+    * 初回ユーザー登録 (テーブルにレコードが 0 件) の場合は認証不要。
+    * それ以降は SYSTEM_ADMIN / PROJECT_OWNER のみ許可。
+    """
+
+    # ユーザーが存在するかを確認
+    from ...models import UserRole  # ローカル import で循環参照回避
+
+    total_users: int = db.query(User).count()  # type: ignore[arg-type]
+
+    if total_users > 0:
+        # 既にユーザーがいる場合は認可チェック
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication credentials were not provided",
+            )
+        if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.PROJECT_OWNER]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+            )
+
+    # -- 入力値重複チェック --
     user_obj = user.get_by_email(db, email=user_in.email)
     if user_obj:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The user with this email already exists in the system.",
         )
-    
+
     user_obj = user.get_by_username(db, username=user_in.username)
     if user_obj:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The user with this username already exists in the system.",
         )
-    
+
+    # -- ユーザー作成 --
     user_obj = user.create(db, obj_in=user_in)
     return user_obj
 
