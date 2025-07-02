@@ -89,6 +89,9 @@ pip install -r requirements.txt
 # データベース初期化（SQLite）
 python -c "from app.database import create_tables; create_tables()"
 
+# Alembicマイグレーション初期化（オプション）
+alembic upgrade head
+
 # 開発サーバー起動
 uvicorn app.main:app --reload
 ```
@@ -104,7 +107,11 @@ docker-compose --profile frontend up -d
 
 ### 4. 初期データの投入
 ```bash
-# 開発サーバーが起動した状態で
+# seedスクリプトを使用した初期管理者作成
+cd backend
+python seed.py
+
+# または、APIを使用した手動作成（開発サーバーが起動した状態で）
 curl -X POST "http://localhost:8000/api/v1/users/" \
   -H "Content-Type: application/json" \
   -d '{
