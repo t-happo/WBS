@@ -104,16 +104,9 @@ docker-compose --profile frontend up -d
 
 ### 4. 初期データの投入
 ```bash
-# 開発サーバーが起動した状態で
-curl -X POST "http://localhost:8000/api/v1/users/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "email": "admin@example.com",
-    "full_name": "System Administrator",
-    "password": "admin123",
-    "role": "system_admin"
-  }'
+# SQLite / PostgreSQL いずれの場合も、下記コマンドでテーブル作成と
+# システム管理者ユーザー (username: admin / password: admin123) を投入できます。
+python backend/seed.py --username admin --email admin@example.com --password admin123
 ```
 
 ## API仕様
