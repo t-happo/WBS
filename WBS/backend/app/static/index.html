@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>プロジェクト管理・WBSツール</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #4a5568;
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            text-align: center;
+            color: #718096;
+            font-size: 1.1em;
+        }
+
+        .login-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .dashboard {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .logout-btn {
+            background: #e53e3e;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: #f7fafc;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h3 {
+            color: #4a5568;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .project-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+            cursor: pointer;
+        }
+
+        .project-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .project-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-planning { background: #fef5e7; color: #d69e2e; }
+        .status-active { background: #e6fffa; color: #38a169; }
+        .status-completed { background: #e6f3ff; color: #3182ce; }
+        .status-on-hold { background: #fed7d7; color: #e53e3e; }
+
+        .task-list {
+            list-style: none;
+        }
+
+        .task-item {
+            padding: 10px;
+            border-left: 4px solid #e2e8f0;
+            margin-bottom: 10px;
+            background: #f7fafc;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .task-item.completed {
+            border-left-color: #38a169;
+            background: #f0fff4;
+        }
+
+        .task-item.in-progress {
+            border-left-color: #3182ce;
+            background: #ebf8ff;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #c6f6d5;
+            color: #2f855a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            margin: 50px auto;
+            position: relative;
+        }
+
+        .close {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #718096;
+        }
+
+        .close:hover {
+            color: #4a5568;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ログインセクション -->
+        <div class="header">
+            <h1>📊 プロジェクト管理・WBSツール</h1>
+            <p>システム開発プロジェクト向けの工程管理ツール</p>
+        </div>
+
+        <div class="login-section" id="loginSection">
+            <h2 style="text-align: center; margin-bottom: 30px; color: #4a5568;">ログイン</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">ユーザー名</label>
+                    <input type="text" id="username" name="username" value="admin" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">パスワード</label>
+                    <input type="password" id="password" name="password" value="admin123" required>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">ログイン</button>
+            </form>
+        </div>
+
+        <!-- ダッシュボード -->
+        <div class="dashboard" id="dashboard">
+            <div class="dashboard-header">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">A</div>
+                    <div>
+                        <div id="userName">管理者</div>
+                        <div style="font-size: 14px; color: #718096;" id="userRole">システム管理者</div>
+                    </div>
+                </div>
+                <button class="logout-btn" onclick="logout()">ログアウト</button>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('projects')">📋 プロジェクト</button>
+                <button class="tab" onclick="showTab('tasks')">✅ タスク</button>
+                <button class="tab" onclick="showTab('users')">👥 ユーザー</button>
+                <button class="tab" onclick="showTab('reports')">📊 レポート</button>
+            </div>
+
+            <!-- プロジェクトタブ -->
+            <div id="projects" class="tab-content active">
+                <div class="card">
+                    <h3>プロジェクト一覧</h3>
+                    <button class="btn" onclick="showCreateProjectModal()">新規プロジェクト作成</button>
+                    <div class="project-grid" id="projectGrid">
+                        <div class="loading">読み込み中...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- タスクタブ -->
+            <div id="tasks" class="tab-content">
+                <div class="card">
+                    <h3>タスク管理</h3>
+                    <div id="taskContent">
+                        <div class="loading">プロジェクトを選択してください</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ユーザータブ -->
+            <div id="users" class="tab-content">
+                <div class="card">
+                    <h3>ユーザー管理</h3>
+                    <button class="btn" onclick="showCreateUserModal()">新規ユーザー作成</button>
+                    <div id="userList">
+                        <div class="loading">読み込み中...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- レポートタブ -->
+            <div id="reports" class="tab-content">
+                <div class="card">
+                    <h3>プロジェクトレポート</h3>
+                    <div id="reportContent">
+                        <div class="loading">データを読み込み中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- プロジェクト作成モーダル -->
+    <div id="createProjectModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('createProjectModal')">&times;</span>
+            <h3>新規プロジェクト作成</h3>
+            <form id="createProjectForm">
+                <div class="form-group">
+                    <label for="projectName">プロジェクト名</label>
+                    <input type="text" id="projectName" required>
+                </div>
+                <div class="form-group">
+                    <label for="projectDescription">説明</label>
+                    <input type="text" id="projectDescription">
+                </div>
+                <div class="form-group">
+                    <label for="projectStatus">ステータス</label>
+                    <select id="projectStatus" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                        <option value="planning">計画中</option>
+                        <option value="active">進行中</option>
+                        <option value="on_hold">保留中</option>
+                        <option value="completed">完了</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn">作成</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ユーザー作成モーダル -->
+    <div id="createUserModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('createUserModal')">&times;</span>
+            <h3>新規ユーザー作成</h3>
+            <form id="createUserForm">
+                <div class="form-group">
+                    <label for="newUsername">ユーザー名</label>
+                    <input type="text" id="newUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="newEmail">メールアドレス</label>
+                    <input type="email" id="newEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="newFullName">氏名</label>
+                    <input type="text" id="newFullName" required>
+                </div>
+                <div class="form-group">
+                    <label for="newPassword">パスワード</label>
+                    <input type="password" id="newPassword" required>
+                </div>
+                <div class="form-group">
+                    <label for="newRole">役割</label>
+                    <select id="newRole" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                        <option value="team_member">チームメンバー</option>
+                        <option value="project_manager">プロジェクトマネージャー</option>
+                        <option value="project_owner">プロジェクトオーナー</option>
+                        <option value="system_admin">システム管理者</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn">作成</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let authToken = null;
+
+        // ログインフォーム処理
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/api/v1/users/login/simple', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    currentUser = data.user;
+                    
+                    // ログイン成功
+                    document.getElementById('loginSection').style.display = 'none';
+                    document.getElementById('dashboard').style.display = 'block';
+                    
+                    // ユーザー情報表示
+                    document.getElementById('userName').textContent = currentUser.full_name;
+                    document.getElementById('userRole').textContent = getRoleDisplayName(currentUser.role);
+                    document.getElementById('userAvatar').textContent = currentUser.full_name.charAt(0);
+                    
+                    // データ読み込み
+                    loadProjects();
+                    loadUsers();
+                } else {
+                    alert('ログインに失敗しました。ユーザー名とパスワードを確認してください。');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('ログインエラーが発生しました。');
+            }
+        });
+
+        // ログアウト
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('dashboard').style.display = 'none';
+        }
+
+        // タブ切り替え
+        function showTab(tabName) {
+            // タブボタンのアクティブ状態を更新
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // タブコンテンツの表示切り替え
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        // プロジェクト読み込み
+        async function loadProjects() {
+            try {
+                const response = await fetch('/api/v1/projects/', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const projects = await response.json();
+                    displayProjects(projects);
+                } else {
+                    document.getElementById('projectGrid').innerHTML = '<div class="error">プロジェクトの読み込みに失敗しました。</div>';
+                }
+            } catch (error) {
+                console.error('Load projects error:', error);
+                document.getElementById('projectGrid').innerHTML = '<div class="error">プロジェクトの読み込みエラーが発生しました。</div>';
+            }
+        }
+
+        // プロジェクト表示
+        function displayProjects(projects) {
+            const grid = document.getElementById('projectGrid');
+            
+            if (projects.length === 0) {
+                grid.innerHTML = '<div style="text-align: center; color: #718096; padding: 40px;">プロジェクトがありません。新規プロジェクトを作成してください。</div>';
+                return;
+            }
+
+            grid.innerHTML = projects.map(project => `
+                <div class="project-card" onclick="selectProject(${project.id})">
+                    <h4 style="margin-bottom: 10px; color: #4a5568;">${project.name}</h4>
+                    <p style="color: #718096; margin-bottom: 15px;">${project.description || '説明なし'}</p>
+                    <div class="project-status status-${project.status}">${getStatusDisplayName(project.status)}</div>
+                    <div style="margin-top: 15px; font-size: 14px; color: #718096;">
+                        作成日: ${new Date(project.created_at).toLocaleDateString('ja-JP')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ユーザー読み込み
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/v1/users/', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const users = await response.json();
+                    displayUsers(users);
+                } else {
+                    document.getElementById('userList').innerHTML = '<div class="error">ユーザーの読み込みに失敗しました。</div>';
+                }
+            } catch (error) {
+                console.error('Load users error:', error);
+                document.getElementById('userList').innerHTML = '<div class="error">ユーザーの読み込みエラーが発生しました。</div>';
+            }
+        }
+
+        // ユーザー表示
+        function displayUsers(users) {
+            const userList = document.getElementById('userList');
+            
+            if (users.length === 0) {
+                userList.innerHTML = '<div style="text-align: center; color: #718096; padding: 40px;">ユーザーがありません。</div>';
+                return;
+            }
+
+            userList.innerHTML = users.map(user => `
+                <div style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 30px; height: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">
+                            ${user.full_name.charAt(0)}
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; color: #4a5568;">${user.full_name}</div>
+                            <div style="font-size: 14px; color: #718096;">${user.email}</div>
+                        </div>
+                        <div style="margin-left: auto; padding: 4px 12px; background: #f7fafc; border-radius: 20px; font-size: 12px; color: #4a5568;">
+                            ${getRoleDisplayName(user.role)}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // プロジェクト作成モーダル表示
+        function showCreateProjectModal() {
+            document.getElementById('createProjectModal').style.display = 'block';
+        }
+
+        // ユーザー作成モーダル表示
+        function showCreateUserModal() {
+            document.getElementById('createUserModal').style.display = 'block';
+        }
+
+        // モーダル閉じる
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // プロジェクト作成
+        document.getElementById('createProjectForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const projectData = {
+                name: document.getElementById('projectName').value,
+                description: document.getElementById('projectDescription').value,
+                status: document.getElementById('projectStatus').value
+            };
+
+            try {
+                const response = await fetch('/api/v1/projects/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(projectData)
+                });
+
+                if (response.ok) {
+                    closeModal('createProjectModal');
+                    document.getElementById('createProjectForm').reset();
+                    loadProjects();
+                    alert('プロジェクトが作成されました。');
+                } else {
+                    alert('プロジェクトの作成に失敗しました。');
+                }
+            } catch (error) {
+                console.error('Create project error:', error);
+                alert('プロジェクト作成エラーが発生しました。');
+            }
+        });
+
+        // ユーザー作成
+        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userData = {
+                username: document.getElementById('newUsername').value,
+                email: document.getElementById('newEmail').value,
+                full_name: document.getElementById('newFullName').value,
+                password: document.getElementById('newPassword').value,
+                role: document.getElementById('newRole').value
+            };
+
+            try {
+                const response = await fetch('/api/v1/users/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(userData)
+                });
+
+                if (response.ok) {
+                    closeModal('createUserModal');
+                    document.getElementById('createUserForm').reset();
+                    loadUsers();
+                    alert('ユーザーが作成されました。');
+                } else {
+                    alert('ユーザーの作成に失敗しました。');
+                }
+            } catch (error) {
+                console.error('Create user error:', error);
+                alert('ユーザー作成エラーが発生しました。');
+            }
+        });
+
+        // ヘルパー関数
+        function getRoleDisplayName(role) {
+            const roleNames = {
+                'system_admin': 'システム管理者',
+                'project_owner': 'プロジェクトオーナー',
+                'project_manager': 'プロジェクトマネージャー',
+                'team_member': 'チームメンバー',
+                'viewer': '閲覧者'
+            };
+            return roleNames[role] || role;
+        }
+
+        function getStatusDisplayName(status) {
+            const statusNames = {
+                'planning': '計画中',
+                'active': '進行中',
+                'on_hold': '保留中',
+                'completed': '完了',
+                'cancelled': 'キャンセル'
+            };
+            return statusNames[status] || status;
+        }
+
+        // プロジェクト選択
+        function selectProject(projectId) {
+            // タスクタブに切り替え
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelector('.tab:nth-child(2)').classList.add('active');
+            
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById('tasks').classList.add('active');
+            
+            // プロジェクトのタスクを読み込み
+            loadProjectTasks(projectId);
+        }
+
+        // プロジェクトのタスク読み込み
+        async function loadProjectTasks(projectId) {
+            try {
+                const response = await fetch(`/api/v1/tasks/project/${projectId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const tasks = await response.json();
+                    displayTasks(tasks);
+                } else {
+                    document.getElementById('taskContent').innerHTML = '<div class="error">タスクの読み込みに失敗しました。</div>';
+                }
+            } catch (error) {
+                console.error('Load tasks error:', error);
+                document.getElementById('taskContent').innerHTML = '<div class="error">タスクの読み込みエラーが発生しました。</div>';
+            }
+        }
+
+        // タスク表示
+        function displayTasks(tasks) {
+            const taskContent = document.getElementById('taskContent');
+            
+            if (tasks.length === 0) {
+                taskContent.innerHTML = '<div style="text-align: center; color: #718096; padding: 40px;">タスクがありません。</div>';
+                return;
+            }
+
+            taskContent.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <button class="btn" onclick="showCreateTaskModal()">新規タスク作成</button>
+                </div>
+                <ul class="task-list">
+                    ${tasks.map(task => `
+                        <li class="task-item ${task.status === 'completed' ? 'completed' : task.status === 'in_progress' ? 'in-progress' : ''}">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong>${task.name}</strong>
+                                    <div style="font-size: 14px; color: #718096; margin-top: 5px;">${task.description || ''}</div>
+                                </div>
+                                <div style="font-size: 12px; color: #718096;">
+                                    ${getStatusDisplayName(task.status)}
+                                </div>
+                            </div>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+        }
+
+        // 初期化時に管理者ユーザーを作成
+        window.addEventListener('load', async () => {
+            // 管理者ユーザーが存在しない場合は作成
+            try {
+                const response = await fetch('/api/v1/users/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        email: 'admin@example.com',
+                        full_name: 'System Administrator',
+                        password: 'admin123',
+                        role: 'system_admin'
+                    })
+                });
+                
+                if (response.ok) {
+                    console.log('管理者ユーザーが作成されました。');
+                } else if (response.status === 400) {
+                    console.log('管理者ユーザーは既に存在します。');
+                }
+            } catch (error) {
+                console.log('管理者ユーザーの作成をスキップしました。');
+            }
+        });
+    </script>
+</body>
+</html> 
