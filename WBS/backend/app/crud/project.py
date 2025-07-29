@@ -76,7 +76,7 @@ class CRUDProject(CRUDBase[Project, ProjectCreate, ProjectUpdate]):
         from ..models import UserRole
         
         # Create project
-        project_data = obj_in.dict()
+        project_data = obj_in.model_dump()  # Use model_dump() for Pydantic v2
         project_data["owner_id"] = owner_id
         db_obj = Project(**project_data)
         db.add(db_obj)
