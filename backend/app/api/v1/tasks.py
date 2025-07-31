@@ -50,7 +50,7 @@ def read_project_tasks(
         from sqlalchemy import text
         
         result = db.execute(
-            text("SELECT id, name, description, task_type, status, priority, estimated_hours, actual_hours, planned_start_date, planned_end_date, created_at FROM tasks WHERE project_id = :project_id ORDER BY created_at DESC"),
+            text("SELECT id, name, description, task_type, status, priority, estimated_hours, actual_hours, planned_start_date, planned_end_date, progress_percentage, created_at FROM tasks WHERE project_id = :project_id ORDER BY created_at DESC"),
             {"project_id": project_id}
         )
         rows = result.fetchall()
@@ -68,7 +68,8 @@ def read_project_tasks(
                 "actual_hours": row[7],
                 "start_date": row[8],
                 "end_date": row[9],
-                "created_at": row[10],
+                "progress_percentage": row[10] or 0,
+                "created_at": row[11],
                 "project_id": project_id
             })
         
@@ -90,7 +91,7 @@ def get_gantt_data(
         
         # Get tasks for the project
         result = db.execute(
-            text("SELECT id, name, description, task_type, status, priority, estimated_hours, actual_hours, planned_start_date, planned_end_date, parent_id, created_at FROM tasks WHERE project_id = :project_id ORDER BY created_at"),
+            text("SELECT id, name, description, task_type, status, priority, estimated_hours, actual_hours, planned_start_date, planned_end_date, progress_percentage, parent_id, created_at FROM tasks WHERE project_id = :project_id ORDER BY created_at"),
             {"project_id": project_id}
         )
         rows = result.fetchall()
@@ -108,8 +109,9 @@ def get_gantt_data(
                 "actual_hours": row[7],
                 "start_date": row[8],
                 "end_date": row[9],
-                "parent_task_id": row[10],
-                "created_at": row[11]
+                "progress_percentage": row[10] or 0,
+                "parent_task_id": row[11],
+                "created_at": row[12]
             })
         
         # Get dependencies for the project
@@ -248,10 +250,11 @@ def update_task(
         actual_hours = task_data.get("actual_hours")
         start_date = task_data.get("start_date")
         end_date = task_data.get("end_date")
+        progress_percentage = task_data.get("progress_percentage")
         
         # Update task
         db.execute(
-            text("UPDATE tasks SET name = :name, description = :description, task_type = :task_type, status = :status, priority = :priority, estimated_hours = :estimated_hours, actual_hours = :actual_hours, planned_start_date = :start_date, planned_end_date = :end_date, updated_at = datetime('now') WHERE id = :task_id"),
+            text("UPDATE tasks SET name = :name, description = :description, task_type = :task_type, status = :status, priority = :priority, estimated_hours = :estimated_hours, actual_hours = :actual_hours, planned_start_date = :start_date, planned_end_date = :end_date, progress_percentage = :progress_percentage, updated_at = datetime('now') WHERE id = :task_id"),
             {
                 "name": name,
                 "description": description,
@@ -262,6 +265,7 @@ def update_task(
                 "actual_hours": actual_hours,
                 "start_date": start_date,
                 "end_date": end_date,
+                "progress_percentage": progress_percentage,
                 "task_id": task_id
             }
         )
@@ -269,7 +273,7 @@ def update_task(
         
         # Get updated task
         result = db.execute(
-            text("SELECT id, name, description, task_type, status, priority, estimated_hours, actual_hours, planned_start_date, planned_end_date, project_id, created_at, updated_at FROM tasks WHERE id = :task_id"),
+            text("SELECT id, name, description, task_type, status, priority, estimated_hours, actual_hours, planned_start_date, planned_end_date, progress_percentage, project_id, created_at, updated_at FROM tasks WHERE id = :task_id"),
             {"task_id": task_id}
         )
         row = result.fetchone()
@@ -286,9 +290,10 @@ def update_task(
                 "actual_hours": row[7],
                 "start_date": row[8],
                 "end_date": row[9],
-                "project_id": row[10],
-                "created_at": row[11],
-                "updated_at": row[12]
+                "progress_percentage": row[10] or 0,
+                "project_id": row[11],
+                "created_at": row[12],
+                "updated_at": row[13]
             }
         else:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -344,8 +349,9 @@ def create_task_dependency(
             raise HTTPException(status_code=400, detail="Cannot create dependency to itself")
         
         # Insert dependency
+        print(f"Attempting to create dependency: predecessor={predecessor_id}, successor={successor_id}, type={dependency_type}, lag={lag_days}")
         result = db.execute(
-            text("INSERT INTO task_dependencies (predecessor_id, successor_id, dependency_type, lag_days) VALUES (:predecessor_id, :successor_id, :dependency_type, :lag_days)"),
+            text("INSERT INTO task_dependencies (predecessor_id, successor_id, dependency_type, lag_days, created_at) VALUES (:predecessor_id, :successor_id, :dependency_type, :lag_days, datetime('now'))"),
             {
                 "predecessor_id": predecessor_id,
                 "successor_id": successor_id,
@@ -371,7 +377,13 @@ def create_task_dependency(
         
     except Exception as e:
         print(f"Error creating dependency: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create dependency")
+        error_message = str(e)
+        if "UNIQUE constraint failed" in error_message:
+            raise HTTPException(status_code=400, detail="Dependency already exists between these tasks")
+        elif "FOREIGN KEY constraint failed" in error_message:
+            raise HTTPException(status_code=400, detail="One or both tasks do not exist")
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to create dependency: {error_message}")
 
 
 @router.delete("/dependencies/{dependency_id}")

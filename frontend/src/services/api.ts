@@ -106,6 +106,40 @@ export const projectsAPI = {
   
   getStatistics: () => 
     api.get('/projects/statistics'),
+  
+  // Export functions
+  exportProjects: async (format: 'csv' | 'excel' | 'pdf', projectId?: number) => {
+    const params = new URLSearchParams({ format });
+    if (projectId) {
+      params.append('project_id', projectId.toString());
+    }
+    
+    const response = await api.get(`/projects/export?${params}`, {
+      responseType: 'blob',
+    });
+    
+    // ファイル名を取得
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = `projects_export.${format === 'excel' ? 'xlsx' : format}`;
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename=(.+)/);
+      if (match) {
+        filename = match[1];
+      }
+    }
+    
+    // ダウンロード
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    
+    return response;
+  },
 };
 
 export interface TaskDependency {

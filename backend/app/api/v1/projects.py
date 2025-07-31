@@ -1,6 +1,8 @@
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+import io
 
 from ...database import get_db
 from ...crud import project, project_member
@@ -11,6 +13,7 @@ from ...schemas.project import (
 from ...schemas.user import User
 from ...api.deps import get_current_user
 from ...models import UserRole
+from ...utils.export import DataExporter, ProjectExporter
 
 router = APIRouter()
 
@@ -147,7 +150,7 @@ def check_project_permission(
 def read_projects(
     db: Session = Depends(get_db),
 ) -> Any:
-    """Retrieve projects - real version"""
+    """Retrieve projects"""
     try:
         from sqlalchemy import text
         
@@ -174,12 +177,44 @@ def read_projects(
         return []
 
 
+@router.get("/{project_id}")
+def get_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+) -> Any:
+    """Get project by ID"""
+    try:
+        from sqlalchemy import text
+        
+        result = db.execute(
+            text("SELECT id, name, description, status, created_at, updated_at FROM projects WHERE id = :project_id"),
+            {"project_id": project_id}
+        )
+        row = result.fetchone()
+        
+        if row:
+            return {
+                "id": row[0],
+                "name": row[1],
+                "description": row[2],
+                "status": row[3],
+                "created_at": row[4],
+                "updated_at": row[5]
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Project not found")
+            
+    except Exception as e:
+        print(f"Error fetching project: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch project")
+
+
 @router.post("/")
 def create_project(
     project_data: dict,
     db: Session = Depends(get_db),
 ) -> Any:
-    """Create new project - real version"""
+    """Create new project"""
     try:
         from sqlalchemy import text
         
@@ -257,7 +292,7 @@ def update_project(
                 "name": row[1],
                 "description": row[2],
                 "status": row[3],
-                "created_at": row[4],
+                "created_at": row[4],  
                 "updated_at": row[5]
             }
         else:
@@ -300,219 +335,111 @@ def delete_project(
         raise HTTPException(status_code=500, detail="Failed to delete project")
 
 
-@router.get("/{project_id}", response_model=ProjectWithMembers)
-def read_project(
-    *,
+@router.get("/export")
+def export_projects(
+    format: str = Query("csv", regex="^(csv|excel|pdf)$"),
+    project_id: int = Query(None),
     db: Session = Depends(get_db),
-    project_id: int,
-    current_user: User = Depends(get_current_user),
-) -> Any:
-    """Get project by ID"""
-    # Check if user has access to project
-    check_project_permission(
-        project_id, current_user, db, 
-        required_roles=[UserRole.PROJECT_OWNER, UserRole.PROJECT_MANAGER, UserRole.TEAM_MEMBER, UserRole.VIEWER]
-    )
-    
-    project_obj = project.get_with_members(db, project_id=project_id)
-    if not project_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    return project_obj
-
-
-@router.put("/{project_id}", response_model=Project)
-def update_project(
-    *,
-    db: Session = Depends(get_db),
-    project_id: int,
-    project_in: ProjectUpdate,
-    current_user: User = Depends(get_current_user),
-) -> Any:
-    """Update project"""
-    check_project_permission(project_id, current_user, db)
-    
-    project_obj = project.get(db, id=project_id)
-    if not project_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
-    project_obj = project.update(db, db_obj=project_obj, obj_in=project_in)
-    return project_obj
-
-
-@router.delete("/{project_id}")
-def delete_project(
-    *,
-    db: Session = Depends(get_db),
-    project_id: int,
-    current_user: User = Depends(get_current_user),
-) -> Any:
-    """Delete project"""
-    # Only project owner or system admin can delete
-    check_project_permission(project_id, current_user, db, required_roles=[UserRole.PROJECT_OWNER])
-    
-    project_obj = project.get(db, id=project_id)
-    if not project_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
-    project.remove(db, id=project_id)
-    return {"message": "Project deleted successfully"}
-
-
-# Project Members endpoints
-@router.get("/{project_id}/members", response_model=List[ProjectMember])
-def read_project_members(
-    *,
-    db: Session = Depends(get_db),
-    project_id: int,
-    skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(get_current_user),
-) -> Any:
-    """Get project members"""
-    check_project_permission(
-        project_id, current_user, db,
-        required_roles=[UserRole.PROJECT_OWNER, UserRole.PROJECT_MANAGER, UserRole.TEAM_MEMBER, UserRole.VIEWER]
-    )
-    
-    members = project_member.get_by_project(db, project_id=project_id, skip=skip, limit=limit)
-    return members
-
-
-@router.post("/{project_id}/members", response_model=ProjectMember)
-def add_project_member(
-    *,
-    db: Session = Depends(get_db),
-    project_id: int,
-    member_in: ProjectMemberCreate,
-    current_user: User = Depends(get_current_user),
-) -> Any:
-    """Add member to project"""
-    check_project_permission(project_id, current_user, db)
-    
-    # Check if project exists
-    project_obj = project.get(db, id=project_id)
-    if not project_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
-    # Check if user is already a member
-    existing_member = project_member.get_by_user_and_project(
-        db, user_id=member_in.user_id, project_id=project_id
-    )
-    if existing_member:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is already a member of this project"
-        )
-    
-    member_in.project_id = project_id
-    member_obj = project_member.create(db, obj_in=member_in)
-    return member_obj
-
-
-@router.put("/{project_id}/members/{user_id}", response_model=ProjectMember)
-def update_project_member(
-    *,
-    db: Session = Depends(get_db),
-    project_id: int,
-    user_id: int,
-    member_in: ProjectMemberUpdate,
-    current_user: User = Depends(get_current_user),
-) -> Any:
-    """Update project member"""
-    check_project_permission(project_id, current_user, db)
-    
-    member_obj = project_member.get_by_user_and_project(
-        db, user_id=user_id, project_id=project_id
-    )
-    if not member_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project member not found"
-        )
-    
-    member_obj = project_member.update(db, db_obj=member_obj, obj_in=member_in)
-    return member_obj
-
-
-@router.delete("/{project_id}/members/{user_id}")
-def remove_project_member(
-    *,
-    db: Session = Depends(get_db),
-    project_id: int,
-    user_id: int,
-    current_user: User = Depends(get_current_user),
-) -> Any:
-    """Remove member from project"""
-    check_project_permission(project_id, current_user, db)
-    
-    member_obj = project_member.remove_member(
-        db, user_id=user_id, project_id=project_id
-    )
-    if not member_obj:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project member not found"
-        )
-    
-    return {"message": "Member removed from project"}
-
-
-@router.get("/my", response_model=List[Project])
-def read_my_projects(
-    db: Session = Depends(get_db),
-    skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(get_current_user),
-) -> Any:
-    """Get projects where current user is a member"""
-    projects = project.get_by_member(db, user_id=current_user.id, skip=skip, limit=limit)
-    return projects
-
-
-@router.get("/owned", response_model=List[Project])
-def read_owned_projects(
-    db: Session = Depends(get_db),
-    skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(get_current_user),
-) -> Any:
-    """Get projects owned by current user"""
-    projects = project.get_by_owner(db, owner_id=current_user.id, skip=skip, limit=limit)
-    return projects
-
-
-@router.get("/search/{search_term}", response_model=List[Project])
-def search_projects(
-    *,
-    db: Session = Depends(get_db),
-    search_term: str,
-    skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(get_current_user),
-) -> Any:
-    """Search projects"""
-    projects = project.search_projects(db, search_term=search_term, skip=skip, limit=limit)
-    
-    # Filter results based on user permissions
-    if current_user.role != UserRole.SYSTEM_ADMIN:
-        # Only show projects user is a member of
-        user_project_ids = {
-            p.project_id for p in project_member.get_user_projects_with_role(
-                db, user_id=current_user.id, role=current_user.role
+    current_user: User = Depends(get_current_user)
+) -> StreamingResponse:
+    """プロジェクトデータをエクスポート"""
+    try:
+        from sqlalchemy import text
+        
+        # プロジェクトデータ取得
+        if project_id:
+            # 特定のプロジェクト
+            project_query = text("SELECT * FROM projects WHERE id = :project_id")
+            project_result = db.execute(project_query, {"project_id": project_id}).fetchall()
+        else:
+            # 全プロジェクト
+            project_query = text("SELECT * FROM projects ORDER BY created_at DESC")
+            project_result = db.execute(project_query).fetchall()
+        
+        # プロジェクトオブジェクトに変換
+        projects = []
+        for row in project_result:
+            project_obj = type('Project', (), {
+                'id': row[0],
+                'name': row[1],
+                'description': row[2],
+                'status': row[3],
+                'created_at': row[7] if len(row) > 7 else None,
+                'updated_at': row[8] if len(row) > 8 else None,
+            })()
+            projects.append(project_obj)
+        
+        # タスクデータ取得（統計用）
+        tasks_by_project = {}
+        if projects:
+            project_ids = [p.id for p in projects]
+            placeholders = ','.join(['?' for _ in project_ids])
+            tasks_query = text(f"SELECT * FROM tasks WHERE project_id IN ({placeholders})")
+            tasks_result = db.execute(tasks_query, project_ids).fetchall()
+            
+            for row in tasks_result:
+                project_id = row[1]  # project_id column
+                if project_id not in tasks_by_project:
+                    tasks_by_project[project_id] = []
+                
+                task_obj = type('Task', (), {
+                    'id': row[0],
+                    'project_id': row[1],
+                    'status': row[5],  # status column
+                })()
+                tasks_by_project[project_id].append(task_obj)
+        
+        # データをフォーマット
+        formatted_data = ProjectExporter.format_project_data(projects, tasks_by_project)
+        
+        if not formatted_data:
+            raise HTTPException(status_code=404, detail="エクスポートするデータがありません")
+        
+        # フォーマットに応じてエクスポート
+        if format == "csv":
+            output = DataExporter.to_csv(formatted_data)
+            content = output.getvalue()
+            media_type = "text/csv"
+            filename = f"projects_export.csv"
+            
+            return StreamingResponse(
+                io.StringIO(content),
+                media_type=media_type,
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
             )
-        }
-        projects = [p for p in projects if p.id in user_project_ids]
-    
-    return projects
+            
+        elif format == "excel":
+            output = DataExporter.to_excel(formatted_data, "プロジェクト一覧")
+            content = output.getvalue()
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            filename = f"projects_export.xlsx"
+            
+            return StreamingResponse(
+                io.BytesIO(content),
+                media_type=media_type,
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+            
+        elif format == "pdf":
+            title = f"プロジェクト一覧レポート"
+            if project_id:
+                project_name = next((p.name for p in projects if p.id == project_id), "不明")
+                title = f"プロジェクトレポート - {project_name}"
+            
+            output = DataExporter.to_pdf(formatted_data, title)
+            content = output.getvalue()
+            media_type = "application/pdf"
+            filename = f"projects_export.pdf"
+            
+            return StreamingResponse(
+                io.BytesIO(content),
+                media_type=media_type,
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+            
+        else:
+            raise HTTPException(status_code=400, detail="サポートされていないフォーマットです")
+            
+    except Exception as e:
+        print(f"Export error: {e}")
+        raise HTTPException(status_code=500, detail=f"エクスポート中にエラーが発生しました: {str(e)}")

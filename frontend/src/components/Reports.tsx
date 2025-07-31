@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Statistic, Table, Select, DatePicker, Button, Space, Divider } from 'antd';
-import { BarChartOutlined, ProjectOutlined, CheckCircleOutlined, ClockCircleOutlined, FileExcelOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Statistic, Table, Select, DatePicker, Button, Space, Divider, Dropdown, message } from 'antd';
+import { BarChartOutlined, ProjectOutlined, CheckCircleOutlined, ClockCircleOutlined, FileExcelOutlined, DownOutlined, FilePdfOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { projectsAPI, tasksAPI } from '../services/api';
 
@@ -123,20 +123,40 @@ const Reports: React.FC = () => {
     },
   ];
 
-  const handleExport = () => {
-    // エクスポート機能（仮実装）
-    const data = projectProgressData.map((item: ProjectProgressData) => ({
-      'プロジェクト名': item.name,
-      'ステータス': item.status,
-      'タスク数': item.tasks,
-      '完了タスク': item.completed,
-      '進捗率': `${item.progress}%`,
-    }));
-    
-    console.log('エクスポートデータ:', data);
-    // 実際の実装では、ここでCSVやExcelファイルを生成してダウンロード
-    alert('レポートをエクスポートしました（デモ）');
+  const handleExport = async (format: 'csv' | 'excel' | 'pdf') => {
+    try {
+      message.loading('エクスポート中...', 0);
+      await projectsAPI.exportProjects(format, selectedProject);
+      message.destroy();
+      message.success(`${format.toUpperCase()}ファイルをダウンロードしました`);
+    } catch (error: any) {
+      message.destroy();
+      message.error(`エクスポートに失敗しました: ${error.response?.data?.detail || error.message}`);
+      console.error('Export error:', error);
+    }
   };
+
+  // エクスポートメニュー
+  const exportMenuItems = [
+    {
+      key: 'csv',
+      label: 'CSV形式',
+      icon: <FileTextOutlined />,
+      onClick: () => handleExport('csv'),
+    },
+    {
+      key: 'excel',
+      label: 'Excel形式',
+      icon: <FileExcelOutlined />,
+      onClick: () => handleExport('excel'),
+    },
+    {
+      key: 'pdf',
+      label: 'PDF形式',
+      icon: <FilePdfOutlined />,
+      onClick: () => handleExport('pdf'),
+    },
+  ];
 
   return (
     <div>
@@ -161,9 +181,14 @@ const Reports: React.FC = () => {
             onChange={setDateRange}
             placeholder={['開始日', '終了日']}
           />
-          <Button type="primary" icon={<FileExcelOutlined />} onClick={handleExport}>
-            エクスポート
-          </Button>
+          <Dropdown
+            menu={{ items: exportMenuItems }}
+            trigger={['click']}
+          >
+            <Button type="primary" icon={<FileExcelOutlined />}>
+              エクスポート <DownOutlined />
+            </Button>
+          </Dropdown>
         </Space>
       </div>
 

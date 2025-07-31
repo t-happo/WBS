@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, InputNumber, DatePicker, message, Space, Popconfirm, Tag, Tabs } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, InputNumber, DatePicker, message, Space, Popconfirm, Tag, Tabs, Progress } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, LinkOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksAPI, Task, TaskDependency } from '../services/api';
@@ -23,7 +23,10 @@ const TaskList: React.FC<TaskListProps> = () => {
 
   const { data: tasks, isLoading } = useQuery({
     queryKey: ['tasks', projectId],
-    queryFn: () => tasksAPI.getByProject(Number(projectId)).then(res => res.data),
+    queryFn: () => tasksAPI.getByProject(Number(projectId)).then(res => {
+      console.log('TaskList query executed, got tasks:', res.data?.length);
+      return res.data;
+    }),
     enabled: !!projectId,
   });
 
@@ -38,6 +41,8 @@ const TaskList: React.FC<TaskListProps> = () => {
     onSuccess: () => {
       message.success('タスクを作成しました');
       queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['gantt', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['dependencies', projectId] });
       setIsModalVisible(false);
       form.resetFields();
     },
@@ -49,25 +54,66 @@ const TaskList: React.FC<TaskListProps> = () => {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<Task> }) =>
       tasksAPI.update(id, data),
-    onSuccess: () => {
+    onSuccess: (result, variables) => {
+      console.log('Task updated successfully from TaskList:', variables.id, result);
+      console.log('Invalidating queries for projectId:', projectId, typeof projectId);
       message.success('タスクを更新しました');
-      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      
+      // より明示的なクエリ無効化と強制リフェッチ
+      queryClient.invalidateQueries({ 
+        queryKey: ['tasks', projectId],
+        exact: false,
+        refetchType: 'active'
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['gantt', projectId],
+        exact: false,
+        refetchType: 'active'
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['dependencies', projectId],
+        exact: false,
+        refetchType: 'active'
+      });
+      
+      console.log('All queries invalidated successfully');
       setIsModalVisible(false);
       setEditingTask(null);
       form.resetFields();
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error('Task update failed from TaskList:', error);
       message.error('タスクの更新に失敗しました');
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: tasksAPI.delete,
-    onSuccess: () => {
+    onSuccess: (result, taskId) => {
+      console.log('Task deleted successfully from TaskList:', taskId, result);
       message.success('タスクを削除しました');
-      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      
+      // より明示的なクエリ無効化と強制リフェッチ
+      queryClient.invalidateQueries({ 
+        queryKey: ['tasks', projectId],
+        exact: false,
+        refetchType: 'active'
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['gantt', projectId],
+        exact: false,
+        refetchType: 'active'
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ['dependencies', projectId],
+        exact: false,
+        refetchType: 'active'
+      });
+      
+      console.log('Queries invalidated after delete for projectId:', projectId);
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error('Task delete failed from TaskList:', error);
       message.error('タスクの削除に失敗しました');
     },
   });
@@ -76,13 +122,20 @@ const TaskList: React.FC<TaskListProps> = () => {
     mutationFn: tasksAPI.createDependency,
     onSuccess: () => {
       message.success('依存関係を作成しました');
+      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
       queryClient.invalidateQueries({ queryKey: ['dependencies', projectId] });
       queryClient.invalidateQueries({ queryKey: ['gantt', projectId] });
       setIsDependencyModalVisible(false);
       dependencyForm.resetFields();
     },
     onError: (error: any) => {
-      message.error(`依存関係の作成に失敗しました: ${error.response?.data?.detail || error.message}`);
+      console.error('Dependency creation failed:', error);
+      const errorMessage = error.response?.data?.detail || error.message;
+      if (errorMessage.includes('already exists')) {
+        message.error('この依存関係は既に存在します');
+      } else {
+        message.error(`依存関係の作成に失敗しました: ${errorMessage}`);
+      }
     },
   });
 
@@ -158,16 +211,21 @@ const TaskList: React.FC<TaskListProps> = () => {
 
   const handleDependencyOk = async () => {
     try {
+      console.log('Attempting to create dependency...');
       const values = await dependencyForm.validateFields();
+      console.log('Dependency form values:', values);
       
       // Check for self-dependency
       if (values.predecessor_id === values.successor_id) {
+        console.log('Self-dependency detected, preventing creation');
         message.error('同じタスクに依存関係を設定することはできません');
         return;
       }
       
+      console.log('Creating dependency with values:', values);
       createDependencyMutation.mutate(values);
     } catch (error) {
+      console.error('Dependency creation validation error:', error);
       message.error('入力値を確認してください');
     }
   };
@@ -268,6 +326,19 @@ const TaskList: React.FC<TaskListProps> = () => {
       key: 'actual_hours',
       width: 80,
       render: (hours: number) => hours ? `${hours}h` : '-',
+    },
+    {
+      title: '進捗率',
+      dataIndex: 'progress_percentage',
+      key: 'progress_percentage',
+      width: 100,
+      render: (progress: number) => (
+        <Progress 
+          percent={progress || 0} 
+          size="small" 
+          status={progress === 100 ? 'success' : progress > 0 ? 'active' : 'normal'}
+        />
+      ),
     },
     {
       title: '開始日',
